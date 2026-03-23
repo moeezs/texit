@@ -15,6 +15,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
+import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { getSupabaseSetupErrorMessage } from "@/lib/supabase/env";
 
 function GoogleIcon() {
   return (
@@ -44,32 +46,76 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    setErrorMessage("");
+
+    let supabase;
+    try {
+      supabase = createSupabaseBrowserClient();
+    } catch {
+      setLoading(false);
+      setErrorMessage(getSupabaseSetupErrorMessage());
+      return;
+    }
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
     setLoading(false);
+
+    if (error) {
+      setErrorMessage(error.message);
+      return;
+    }
+
     router.push("/dashboard");
+    router.refresh();
   };
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    setLoading(false);
-    router.push("/dashboard");
+    setErrorMessage("");
+
+    let supabase;
+    try {
+      supabase = createSupabaseBrowserClient();
+    } catch {
+      setLoading(false);
+      setErrorMessage(getSupabaseSetupErrorMessage());
+      return;
+    }
+
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback?next=/dashboard`,
+      },
+    });
+
+    if (error) {
+      setLoading(false);
+      setErrorMessage(error.message);
+    }
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center px-6 py-12">
-      {/* Background */}
       <div className="fixed inset-0 -z-10">
         <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-gradient-to-r from-purple-500/5 via-blue-500/5 to-cyan-500/5 rounded-full blur-3xl" />
       </div>
 
       <Card className="w-full max-w-md p-2">
         <CardHeader className="text-center space-y-3 pb-6">
-          <Link href="/" className="inline-flex items-center justify-center gap-2 mb-2">
+          <Link
+            href="/"
+            className="inline-flex items-center justify-center gap-2 mb-2"
+          >
             <div className="size-10 rounded-lg bg-gradient-to-br from-white to-white/60 flex items-center justify-center">
               <span className="text-base font-bold text-black">TX</span>
             </div>
@@ -127,6 +173,9 @@ export default function LoginPage() {
                 required
               />
             </div>
+            {errorMessage ? (
+              <p className="text-sm text-destructive">{errorMessage}</p>
+            ) : null}
           </CardContent>
           <CardFooter className="flex flex-col gap-5 pt-4 px-8 pb-8">
             <Button type="submit" className="w-full h-11" disabled={loading}>

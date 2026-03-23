@@ -5,9 +5,11 @@ import {
   useCallback,
   useRef,
   useEffect,
+  type ChangeEvent,
   type MouseEvent as ReactMouseEvent,
 } from "react";
 import Link from "next/link";
+import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import LatexRenderer from "@/components/latex-renderer";
@@ -30,37 +32,7 @@ import {
   Play,
   Sparkles,
 } from "lucide-react";
-
-
-const SAMPLE_DOCUMENT = `\\documentclass{article}
-\\usepackage{amsmath}
-
-\\title{Sample Document}
-\\author{TeXit User}
-\\date{March 2026}
-
-\\begin{document}
-
-\\maketitle
-
-\\section*{Introduction}
-This is a sample LaTeX document to get you started. You can edit this directly or use the AI assistant above to generate LaTeX.
-
-\\section*{Example Math}
-The quadratic formula is given by:
-$$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$$
-
-And here is an identity matrix:
-$$\\begin{bmatrix} 1 & 0 & 0 \\\\ 0 & 1 & 0 \\\\ 0 & 0 & 1 \\end{bmatrix}$$
-
-\\section*{Lists}
-\\begin{itemize}
-    \\item First item with inline math $E = mc^2$
-    \\item Second item with \\textbf{bold text}
-    \\item Third item with \\textit{italic text}
-\\end{itemize}
-
-\\end{document}`;
+import { SAMPLE_DOCUMENT, WELCOME_MESSAGE } from "@/lib/editor-defaults";
 
 type PreviewMode = "preview" | "pdf";
 
@@ -69,11 +41,6 @@ interface ChatMessage {
   role: "user" | "assistant";
   content: string;
 }
-
-const MOCK_RESPONSE = `Sure! Here is the formula you requested:
-\`\`\`latex
-x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}
-\`\`\` You can copy this directly or preview it in the box.`;
 
 function SnippetBox({ code }: { code: string }) {
   const [view, setView] = useState<"code" | "render">("code");
@@ -91,19 +58,21 @@ function SnippetBox({ code }: { code: string }) {
         <div className="flex items-center gap-1 p-0.5 bg-muted/50 rounded-md border border-border/50">
           <button
             onClick={() => setView("code")}
-            className={`text-[10px] font-medium flex items-center gap-1.5 px-2 py-1 rounded-sm transition-colors ${view === "code"
-              ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-              }`}
+            className={`text-[10px] font-medium flex items-center gap-1.5 px-2 py-1 rounded-sm transition-colors ${
+              view === "code"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
           >
             <Code2 className="size-3" /> Code
           </button>
           <button
             onClick={() => setView("render")}
-            className={`text-[10px] font-medium flex items-center gap-1.5 px-2 py-1 rounded-sm transition-colors ${view === "render"
-              ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-              }`}
+            className={`text-[10px] font-medium flex items-center gap-1.5 px-2 py-1 rounded-sm transition-colors ${
+              view === "render"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
           >
             <Play className="size-3" /> Rendered
           </button>
@@ -133,7 +102,9 @@ function SnippetBox({ code }: { code: string }) {
           <div className="text-foreground w-full flex justify-center py-2 pointer-events-none">
             <LatexRenderer
               content={
-                code.trim().startsWith("\\begin") || code.includes("$$") || code.includes("\\[")
+                code.trim().startsWith("\\begin") ||
+                code.includes("$$") ||
+                code.includes("\\[")
                   ? code
                   : `$$\n${code}\n$$`
               }
@@ -145,60 +116,264 @@ function SnippetBox({ code }: { code: string }) {
   );
 }
 
+function PaginatedPDF({ content, previewRef }: { content: string, previewRef: React.RefObject<HTMLDivElement | null> }) {
+  const measureRef = useRef<HTMLDivElement>(null);
+  const [pages, setPages] = useState(1);
+
+  useEffect(() => {
+    if (measureRef.current) {
+      const height = measureRef.current.offsetHeight;
+      const pageCount = Math.max(1, Math.ceil(height / 864));
+      setPages(pageCount);
+    }
+  }, [content]);
+
+  return (
+    <div className="flex flex-col items-center gap-8 pdf-preview-mode w-full" ref={previewRef}>
+      <div className="absolute opacity-0 pointer-events-none left-0 top-0 overflow-hidden" style={{ width: 0, height: 0 }}>
+        <div 
+          ref={measureRef} 
+          style={{ 
+            width: "624px",
+            fontFamily: "'Computer Modern Serif', Georgia, 'Times New Roman', serif",
+            fontSize: "11pt",
+            lineHeight: "1.5",
+          }}
+        >
+          <LatexRenderer content={content} />
+        </div>
+      </div>
+
+      {Array.from({ length: pages }).map((_, i) => (
+        <div 
+          key={i} 
+          className="pdf-page bg-white relative shadow-2xl shadow-black/40 shrink-0"
+          style={{ width: '816px', height: '1056px', padding: '96px', boxSizing: 'border-box' }}
+        >
+          <div className="relative w-full h-full overflow-hidden">
+            <div 
+              className="absolute left-0 w-full"
+              style={{ 
+                top: `-${i * 864}px`, 
+                fontFamily: "'Computer Modern Serif', Georgia, 'Times New Roman', serif",
+                fontSize: "11pt",
+                lineHeight: "1.5",
+                color: "#1a1a1a"
+              }}
+            >
+              <LatexRenderer content={content} />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function EditorPage() {
+  const params = useParams<{ id: string | string[] }>();
+  const router = useRouter();
+  const routeProjectId = Array.isArray(params.id) ? params.id[0] : params.id;
   const [prompt, setPrompt] = useState("");
   const [latexCode, setLatexCode] = useState(SAMPLE_DOCUMENT);
   const [generating, setGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showLeftPanel, setShowLeftPanel] = useState(true);
   const [previewMode, setPreviewMode] = useState<PreviewMode>("preview");
+  const [projectId, setProjectId] = useState(
+    routeProjectId && routeProjectId !== "new" ? routeProjectId : ""
+  );
+  const [projectTitle, setProjectTitle] = useState("Untitled Project");
+  const [loadingProject, setLoadingProject] = useState(true);
+  const [savingProject, setSavingProject] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: "welcome",
       role: "assistant",
-      content: "Hi! I'm your LaTeX assistant. Describe what you need, paste an image, or upload a reference file, and I'll generate the LaTeX code for you.",
+      content: WELCOME_MESSAGE,
     },
   ]);
   const previewRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Splitter states
-  const [splitRatio, setSplitRatio] = useState(0.5); // Editor vs Preview
-  const [verticalSplitRatio, setVerticalSplitRatio] = useState(0.4); // Chat vs Code Source
-
+  const [splitRatio, setSplitRatio] = useState(0.5);
+  const [verticalSplitRatio, setVerticalSplitRatio] = useState(0.4);
   const isDraggingHoriz = useRef(false);
   const isDraggingVert = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const leftPaneRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll chat to bottom
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handleGenerate = useCallback(async () => {
-    if (!prompt.trim()) return;
+  useEffect(() => {
+    let cancelled = false;
 
-    const userMsg: ChatMessage = {
-      id: Date.now().toString(),
-      role: "user",
-      content: prompt,
+    async function bootstrapProject() {
+      if (!routeProjectId) {
+        return;
+      }
+
+      setLoadingProject(true);
+      setErrorMessage("");
+
+      if (routeProjectId === "new") {
+        const createResponse = await fetch("/api/projects", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({}),
+        });
+
+        const createPayload = (await createResponse.json().catch(() => null)) as
+          | { error?: string; project?: { id: string } }
+          | null;
+
+        if (!createResponse.ok || !createPayload?.project) {
+          if (!cancelled) {
+            setErrorMessage(createPayload?.error ?? "Failed to create project.");
+            setLoadingProject(false);
+          }
+          return;
+        }
+
+        if (!cancelled) {
+          router.replace(`/editor/${createPayload.project.id}`);
+        }
+        return;
+      }
+
+      const response = await fetch(`/api/projects/${routeProjectId}`, {
+        credentials: "include",
+      });
+
+      const payload = (await response.json().catch(() => null)) as
+        | {
+            error?: string;
+            project?: {
+              id: string;
+              title: string;
+              latexContent: string;
+              messages: ChatMessage[];
+            };
+          }
+        | null;
+
+      if (!response.ok || !payload?.project) {
+        if (!cancelled) {
+          setErrorMessage(payload?.error ?? "Failed to load project.");
+          setLoadingProject(false);
+        }
+        return;
+      }
+
+      if (!cancelled) {
+        setProjectId(payload.project.id);
+        setProjectTitle(payload.project.title);
+        setLatexCode(payload.project.latexContent);
+        setMessages(
+          payload.project.messages.length
+            ? payload.project.messages
+            : [
+                {
+                  id: "welcome",
+                  role: "assistant",
+                  content: WELCOME_MESSAGE,
+                },
+              ]
+        );
+        setLoadingProject(false);
+      }
+    }
+
+    void bootstrapProject();
+
+    return () => {
+      cancelled = true;
     };
-    setMessages((prev) => [...prev, userMsg]);
+  }, [routeProjectId, router]);
+
+  const handleGenerate = useCallback(async () => {
+    if (!prompt.trim() || !projectId) return;
+
+    const currentPrompt = prompt;
     setPrompt("");
     setGenerating(true);
+    setErrorMessage("");
 
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    const response = await fetch(`/api/projects/${projectId}/messages`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        content: currentPrompt,
+      }),
+    });
 
-    const assistantMsg: ChatMessage = {
-      id: (Date.now() + 1).toString(),
-      role: "assistant",
-      content: MOCK_RESPONSE,
-    };
-    setMessages((prev) => [...prev, assistantMsg]);
+    const payload = (await response.json().catch(() => null)) as
+      | { error?: string; messages?: ChatMessage[] }
+      | null;
+    const returnedMessages = payload?.messages;
+
     setGenerating(false);
-  }, [prompt]);
+
+    if (!response.ok || !returnedMessages) {
+      setPrompt(currentPrompt);
+      setErrorMessage(payload?.error ?? "Failed to send message.");
+      return;
+    }
+
+    setMessages((prev) => [...prev, ...returnedMessages]);
+  }, [projectId, prompt]);
+
+  const handleUploadFile = useCallback(
+    async (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+
+      if (!file || !projectId) {
+        return;
+      }
+
+      setGenerating(true);
+      setErrorMessage("");
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch(`/api/projects/${projectId}/attachments`, {
+        method: "POST",
+        body: formData,
+      });
+
+      const payload = (await response.json().catch(() => null)) as
+        | { error?: string }
+        | null;
+
+      event.target.value = "";
+
+      if (!response.ok) {
+        setGenerating(false);
+        setErrorMessage(payload?.error ?? "Failed to upload file.");
+        return;
+      }
+
+      const refreshResponse = await fetch(`/api/projects/${projectId}`);
+      const refreshPayload = (await refreshResponse.json().catch(() => null)) as
+        | { project?: { messages: ChatMessage[] } }
+        | null;
+
+      setGenerating(false);
+
+      if (refreshResponse.ok && refreshPayload?.project) {
+        setMessages(refreshPayload.project.messages);
+      }
+    },
+    [projectId]
+  );
 
   const handleCopy = useCallback(async () => {
     await navigator.clipboard.writeText(latexCode);
@@ -207,15 +382,52 @@ export default function EditorPage() {
   }, [latexCode]);
 
   const handleDownloadPDF = useCallback(() => {
+    const originalTitle = document.title;
+    document.title = projectTitle || "Untitled Project";
+
+    const triggerPrint = () => {
+      window.print();
+      document.title = originalTitle;
+    };
+
     if (previewMode !== "pdf") {
       setPreviewMode("pdf");
-      setTimeout(() => {
-        window.print();
-      }, 500);
+      setTimeout(triggerPrint, 500);
     } else {
-      window.print();
+      triggerPrint();
     }
-  }, [previewMode]);
+  }, [previewMode, projectTitle]);
+
+  const handleSaveProject = useCallback(async () => {
+    if (!projectId) return;
+
+    setSavingProject(true);
+    setErrorMessage("");
+
+    const response = await fetch(`/api/projects/${projectId}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        title: projectTitle,
+        latexContent: latexCode,
+      }),
+    });
+
+    const payload = (await response.json().catch(() => null)) as
+      | { error?: string; project?: { title: string } }
+      | null;
+
+    setSavingProject(false);
+
+    if (!response.ok || !payload?.project) {
+      setErrorMessage(payload?.error ?? "Failed to save project.");
+      return;
+    }
+
+    setProjectTitle(payload.project.title);
+  }, [latexCode, projectId, projectTitle]);
 
   const handleMouseUpGlobal = useCallback(() => {
     isDraggingHoriz.current = false;
@@ -234,7 +446,7 @@ export default function EditorPage() {
       const rect = leftPaneRef.current.getBoundingClientRect();
       const y = e.clientY - rect.top;
       const ratio = y / rect.height;
-      setVerticalSplitRatio(Math.min(0.8, Math.max(0.2, ratio))); // Chat constraints: 20% to 80%
+      setVerticalSplitRatio(Math.min(0.8, Math.max(0.2, ratio)));
     }
   }, []);
 
@@ -263,18 +475,27 @@ export default function EditorPage() {
 
   const renderMessageContent = (content: string) => {
     const parts = content.split(/(```(?:latex)?\n[\s\S]*?\n```)/g);
-    return parts.map((part, i) => {
-      if (part.startsWith('```')) {
-        const code = part.replace(/^```(?:latex)?\n/, '').replace(/\n```$/, '');
-        return <SnippetBox key={i} code={code} />;
+    return parts.map((part, index) => {
+      if (part.startsWith("```")) {
+        const code = part
+          .replace(/^```(?:latex)?\n/, "")
+          .replace(/\n```$/, "");
+        return <SnippetBox key={index} code={code} />;
       }
-      return <span key={i} className="whitespace-pre-wrap font-sans block mb-1.5">{part}</span>;
+
+      return (
+        <span
+          key={index}
+          className="whitespace-pre-wrap font-sans block mb-1.5"
+        >
+          {part}
+        </span>
+      );
     });
   };
 
   return (
     <div className="h-screen flex flex-col bg-background">
-      {/* Editor Header */}
       <header className="shrink-0 border-b border-border/50 bg-background/80 backdrop-blur-xl z-10">
         <div className="flex items-center justify-between px-4 h-14">
           <div className="flex items-center gap-3">
@@ -285,7 +506,7 @@ export default function EditorPage() {
             </Link>
             <div className="h-5 w-px bg-border/50" />
             <span className="text-sm font-medium text-muted-foreground">
-              Untitled Project
+              {projectTitle}
             </span>
           </div>
           <div className="flex items-center gap-1.5">
@@ -308,20 +529,22 @@ export default function EditorPage() {
             <div className="flex items-center rounded-lg border border-border/50 p-0.5">
               <button
                 onClick={() => setPreviewMode("preview")}
-                className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${previewMode === "preview"
-                  ? "bg-muted text-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-                  }`}
+                className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                  previewMode === "preview"
+                    ? "bg-muted text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
               >
                 <Eye className="size-3.5" />
                 Preview
               </button>
               <button
                 onClick={() => setPreviewMode("pdf")}
-                className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${previewMode === "pdf"
-                  ? "bg-muted text-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-                  }`}
+                className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                  previewMode === "pdf"
+                    ? "bg-muted text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
               >
                 <FileText className="size-3.5" />
                 PDF
@@ -330,7 +553,12 @@ export default function EditorPage() {
 
             <div className="h-5 w-px bg-border/50 mx-0.5" />
 
-            <Button variant="ghost" size="sm" className="h-8" onClick={handleCopy}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8"
+              onClick={handleCopy}
+            >
               {copied ? (
                 <Check className="mr-1.5 size-3.5" />
               ) : (
@@ -347,17 +575,21 @@ export default function EditorPage() {
               <Download className="mr-1.5 size-3.5" />
               PDF
             </Button>
-            <Button variant="ghost" size="sm" className="h-8">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8"
+              onClick={handleSaveProject}
+              disabled={loadingProject || savingProject}
+            >
               <Save className="mr-1.5 size-3.5" />
-              Save
+              {savingProject ? "Saving..." : "Save"}
             </Button>
           </div>
         </div>
       </header>
 
-      {/* Editor Body */}
       <div className="flex-1 flex overflow-hidden relative" ref={containerRef}>
-        {/* Left Pane — Editor + AI */}
         {showLeftPanel && (
           <>
             <div
@@ -365,22 +597,29 @@ export default function EditorPage() {
               style={{ width: `${splitRatio * 100}%` }}
               ref={leftPaneRef}
             >
-              {/* AI Chat Section */}
-              <div className="flex flex-col min-h-0 bg-background pt-2" style={{ height: `${verticalSplitRatio * 100}%` }}>
+              <div
+                className="flex flex-col min-h-0 bg-background pt-2"
+                style={{ height: `${verticalSplitRatio * 100}%` }}
+              >
                 <div className="px-4 pb-2">
                   <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                     <Sparkles className="size-3.5" /> AI Assistant
                   </span>
                 </div>
+                {errorMessage ? (
+                  <div className="px-4 pb-2">
+                    <p className="text-xs text-destructive">{errorMessage}</p>
+                  </div>
+                ) : null}
 
-                {/* Chat Messages */}
                 <div className="flex-1 overflow-y-auto px-4 min-h-0">
                   <div className="space-y-4 py-2">
                     {messages.map((msg) => (
                       <div
                         key={msg.id}
-                        className={`flex gap-3 ${msg.role === "user" ? "justify-end" : "justify-start"
-                          }`}
+                        className={`flex gap-3 ${
+                          msg.role === "user" ? "justify-end" : "justify-start"
+                        }`}
                       >
                         {msg.role === "assistant" && (
                           <div className="size-7 rounded-md bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
@@ -388,12 +627,15 @@ export default function EditorPage() {
                           </div>
                         )}
                         <div
-                          className={`rounded-xl px-4 py-2.5 text-sm leading-relaxed ${msg.role === "user"
-                            ? "bg-primary text-primary-foreground max-w-[80%]"
-                            : "bg-muted/30 text-foreground max-w-[95%]"
-                            }`}
+                          className={`rounded-xl px-4 py-2.5 text-sm leading-relaxed ${
+                            msg.role === "user"
+                              ? "bg-primary text-primary-foreground max-w-[80%]"
+                              : "bg-muted/30 text-foreground max-w-[95%]"
+                          }`}
                         >
-                          {msg.role === "user" ? msg.content : renderMessageContent(msg.content)}
+                          {msg.role === "user"
+                            ? msg.content
+                            : renderMessageContent(msg.content)}
                         </div>
                         {msg.role === "user" && (
                           <div className="size-7 rounded-md bg-muted flex items-center justify-center shrink-0 mt-0.5">
@@ -416,10 +658,14 @@ export default function EditorPage() {
                   </div>
                 </div>
 
-                {/* Chat Input */}
                 <div className="px-4 pb-2 pt-1">
                   <div className="relative flex items-end gap-2 rounded-xl border border-border/60 bg-muted/20 p-1.5 shadow-sm focus-within:ring-1 focus-within:ring-ring focus-within:border-primary transition-all">
-                    <input type="file" ref={fileInputRef} className="hidden" />
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      className="hidden"
+                      onChange={handleUploadFile}
+                    />
                     <Button
                       variant="ghost"
                       size="icon"
@@ -439,15 +685,15 @@ export default function EditorPage() {
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && !e.shiftKey) {
                           e.preventDefault();
-                          handleGenerate();
+                          void handleGenerate();
                         }
                       }}
                     />
                     <Button
                       size="icon"
                       className="h-8 w-8 shrink-0 rounded-lg"
-                      onClick={handleGenerate}
-                      disabled={generating || !prompt.trim()}
+                      onClick={() => void handleGenerate()}
+                      disabled={loadingProject || generating || !prompt.trim()}
                     >
                       {generating ? (
                         <Loader2 className="size-4 animate-spin" />
@@ -464,13 +710,11 @@ export default function EditorPage() {
                 </div>
               </div>
 
-              {/* Vertical Drag Handle */}
               <div
                 className="h-[3px] -my-[1px] cursor-row-resize hover:bg-primary/40 active:bg-primary/60 transition-colors shrink-0 z-10"
                 onMouseDown={handleMouseDownVert}
               />
 
-              {/* Code Editor Section */}
               <div className="flex-1 flex flex-col min-h-0 bg-background border-t border-border/50">
                 <div className="flex items-center justify-between px-4 py-2 border-b border-border/50 bg-muted/10 shrink-0">
                   <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
@@ -481,12 +725,18 @@ export default function EditorPage() {
                   </span>
                 </div>
                 <div className="flex-1 min-h-0 overflow-hidden">
-                  <CodeEditor value={latexCode} onChange={setLatexCode} />
+                  {loadingProject ? (
+                    <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                      <Loader2 className="mr-2 size-4 animate-spin" />
+                      Loading project...
+                    </div>
+                  ) : (
+                    <CodeEditor value={latexCode} onChange={setLatexCode} />
+                  )}
                 </div>
               </div>
             </div>
 
-            {/* Horizontal Drag Handle */}
             <div
               className="w-[3px] -ml-[3px] border-r border-border/50 cursor-col-resize hover:bg-primary/40 active:bg-primary/60 transition-colors shrink-0 z-10"
               onMouseDown={handleMouseDownHoriz}
@@ -494,7 +744,6 @@ export default function EditorPage() {
           </>
         )}
 
-        {/* Right Pane — Preview */}
         <div
           className="flex flex-col min-w-0"
           style={{ width: showLeftPanel ? `${(1 - splitRatio) * 100}%` : "100%" }}
@@ -505,27 +754,13 @@ export default function EditorPage() {
             </span>
           </div>
           <div
-            className={`flex-1 overflow-auto ${previewMode === "pdf"
-              ? "bg-[#595959] p-8" /* Use hex to prevent html2canvas OKLCH crash */
-              : "p-6 sm:p-8"
-              }`}
+            className={`flex-1 overflow-auto ${
+              previewMode === "pdf" ? "bg-[#595959] p-8" : "p-6 sm:p-8"
+            }`}
           >
             {previewMode === "pdf" ? (
-              <div className="max-w-[680px] mx-auto">
-                <div
-                  ref={previewRef}
-                  className="pdf-preview-mode bg-white rounded-sm shadow-2xl shadow-black/40 px-12 py-10"
-                  style={{
-                    fontFamily: "'Computer Modern Serif', Georgia, 'Times New Roman', serif",
-                    fontSize: "11pt",
-                    lineHeight: "1.5",
-                    minHeight: "880px",
-                    backgroundColor: "#ffffff", /* Force explicit hex for html2canvas */
-                    color: "#1a1a1a",
-                  }}
-                >
-                  <LatexRenderer content={latexCode} />
-                </div>
+              <div className="w-full mx-auto md:max-w-[850px] lg:max-w-none flex justify-center">
+                <PaginatedPDF content={latexCode} previewRef={previewRef} />
               </div>
             ) : (
               <div className="max-w-2xl mx-auto" ref={previewRef}>
@@ -536,7 +771,5 @@ export default function EditorPage() {
         </div>
       </div>
     </div>
-
-
-  )
+  );
 }

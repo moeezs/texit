@@ -1,4 +1,5 @@
-const fs = require('fs');
+/* eslint-disable @typescript-eslint/no-require-imports */
+const fs = require("fs");
 
 // We'll just do a very simple direct replacement of the globals.css chunk.
 // These are the approximations of standard shadcn colors in HSL format for the default zinc/slate theme.

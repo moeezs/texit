@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -18,65 +18,163 @@ import {
   Clock,
   MoreHorizontal,
   Search,
+  Loader2,
+  User,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { getSupabaseSetupErrorMessage } from "@/lib/supabase/env";
 
-const mockProjects = [
-  {
-    id: "1",
-    title: "COMPSCI 2AC3 Assignment 3",
-    snippet: "\\section*{Question 1}\nThe language $A$ is \\textbf{not regular}...",
-    updatedAt: "2 hours ago",
-  },
-  {
-    id: "2",
-    title: "Linear Algebra Midterm Notes",
-    snippet: "\\begin{bmatrix} 1 & 0 \\\\ 0 & 1 \\end{bmatrix}",
-    updatedAt: "Yesterday",
-  },
-  {
-    id: "3",
-    title: "Calculus II Problem Set",
-    snippet: "\\int_{0}^{\\infty} e^{-x^2} dx = \\frac{\\sqrt{\\pi}}{2}",
-    updatedAt: "3 days ago",
-  },
-  {
-    id: "4",
-    title: "Physics Lab Report",
-    snippet: "F = ma \\quad \\text{Newton's Second Law}",
-    updatedAt: "1 week ago",
-  },
-  {
-    id: "5",
-    title: "Abstract Algebra Proofs",
-    snippet: "\\forall g \\in G, \\exists g^{-1} \\in G",
-    updatedAt: "1 week ago",
-  },
-  {
-    id: "6",
-    title: "Probability Theory Homework",
-    snippet: "P(A|B) = \\frac{P(B|A) P(A)}{P(B)}",
-    updatedAt: "2 weeks ago",
-  },
-];
+interface ProjectCard {
+  id: string;
+  title: string;
+  snippet: string;
+  updatedAt: string;
+}
+
+function formatRelativeDate(value: string) {
+  const date = new Date(value);
+  const diffMs = Date.now() - date.getTime();
+  const diffMinutes = Math.floor(diffMs / 60000);
+
+  if (diffMinutes < 1) return "Just now";
+  if (diffMinutes < 60) {
+    return `${diffMinutes} minute${diffMinutes === 1 ? "" : "s"} ago`;
+  }
+
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) {
+    return `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`;
+  }
+
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7) return `${diffDays} days ago`;
+
+  const diffWeeks = Math.floor(diffDays / 7);
+  return `${diffWeeks} week${diffWeeks === 1 ? "" : "s"} ago`;
+}
 
 export default function DashboardPage() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
+  const [projects, setProjects] = useState<ProjectCard[]>([]);
+  const [loadingProjects, setLoadingProjects] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadProjects() {
+      let supabase;
+      try {
+        supabase = createSupabaseBrowserClient();
+      } catch {
+        return;
+      }
+      
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        if (!cancelled) {
+          router.push("/login");
+        }
+        return;
+      }
+
+      setLoadingProjects(true);
+      setErrorMessage("");
+
+      const response = await fetch("/api/projects", {
+        credentials: "include",
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | { error?: string; projects?: ProjectCard[] }
+        | null;
+
+      if (!response.ok) {
+        if (!cancelled) {
+          setErrorMessage(payload?.error ?? "Failed to load your projects.");
+          setLoadingProjects(false);
+        }
+        return;
+      }
+
+      if (!cancelled) {
+        setProjects(payload?.projects ?? []);
+        setLoadingProjects(false);
+      }
+    }
+
+    void loadProjects();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const filteredProjects = useMemo(() => {
-    if (!searchQuery.trim()) return mockProjects;
+    if (!searchQuery.trim()) return projects;
     const q = searchQuery.toLowerCase();
-    return mockProjects.filter(
-      (p) =>
-        p.title.toLowerCase().includes(q) ||
-        p.snippet.toLowerCase().includes(q)
+    return projects.filter(
+      (project) =>
+        project.title.toLowerCase().includes(q) ||
+        project.snippet.toLowerCase().includes(q)
     );
-  }, [searchQuery]);
+  }, [projects, searchQuery]);
+
+  const handleCreateProject = async () => {
+    setActionLoading(true);
+    setErrorMessage("");
+
+    const response = await fetch("/api/projects", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({}),
+    });
+    const payload = (await response.json().catch(() => null)) as
+      | { error?: string; project?: { id: string } }
+      | null;
+
+    if (!response.ok || !payload?.project) {
+      setActionLoading(false);
+      setErrorMessage(payload?.error ?? "Failed to create a project.");
+      return;
+    }
+
+    router.push(`/editor/${payload.project.id}`);
+  };
+
+  const handleSignOut = async () => {
+    setActionLoading(true);
+    setErrorMessage("");
+
+    let supabase;
+    try {
+      supabase = createSupabaseBrowserClient();
+    } catch {
+      setActionLoading(false);
+      setErrorMessage(getSupabaseSetupErrorMessage());
+      return;
+    }
+
+    const { error } = await supabase.auth.signOut();
+
+    setActionLoading(false);
+
+    if (error) {
+      setErrorMessage(error.message);
+      return;
+    }
+
+    router.push("/login");
+    router.refresh();
+  };
 
   return (
     <div className="min-h-screen flex flex-col">
-      {/* Header */}
       <header className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl">
         <div className="mx-auto max-w-6xl flex items-center justify-between px-6 h-16">
           <Link href="/dashboard" className="flex items-center gap-2.5">
@@ -86,11 +184,22 @@ export default function DashboardPage() {
             <span className="text-lg font-semibold tracking-tight">TeXit</span>
           </Link>
           <div className="flex items-center gap-3">
+            <Link href="/profile">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-9 rounded-full bg-muted/50 border border-border/50 hover:bg-muted"
+                title="Profile"
+              >
+                <User className="size-4" />
+              </Button>
+            </Link>
             <Button
               variant="ghost"
               size="default"
               className="h-9"
-              onClick={() => router.push("/")}
+              onClick={handleSignOut}
+              disabled={actionLoading}
             >
               <LogOut className="mr-1.5 size-4" />
               Sign Out
@@ -99,17 +208,16 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      {/* Main content */}
       <main className="flex-1 py-8 px-6">
         <div className="mx-auto max-w-6xl">
-          {/* Top section */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
             <div>
               <h1 className="text-2xl font-bold tracking-tight">
                 Your Projects
               </h1>
               <p className="text-sm text-muted-foreground mt-1">
-                {filteredProjects.length} project{filteredProjects.length !== 1 ? "s" : ""}
+                {filteredProjects.length} project
+                {filteredProjects.length !== 1 ? "s" : ""}
                 {searchQuery && ` matching "${searchQuery}"`}
               </p>
             </div>
@@ -126,7 +234,8 @@ export default function DashboardPage() {
               <Button
                 size="default"
                 className="h-10"
-                onClick={() => router.push("/editor/new")}
+                onClick={handleCreateProject}
+                disabled={actionLoading}
               >
                 <Plus className="mr-1.5 size-4" />
                 New Project
@@ -134,11 +243,21 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Project grid */}
-          {filteredProjects.length === 0 ? (
+          {errorMessage ? (
+            <p className="mb-4 text-sm text-destructive">{errorMessage}</p>
+          ) : null}
+
+          {loadingProjects ? (
+            <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+              <Loader2 className="size-10 mb-4 animate-spin opacity-60" />
+              <p className="text-sm">Loading your projects...</p>
+            </div>
+          ) : filteredProjects.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
               <Search className="size-10 mb-4 opacity-40" />
-              <p className="text-sm">No projects found matching &quot;{searchQuery}&quot;</p>
+              <p className="text-sm">
+                No projects found matching &quot;{searchQuery}&quot;
+              </p>
               <Button
                 variant="ghost"
                 size="sm"
@@ -166,7 +285,7 @@ export default function DashboardPage() {
                             <CardDescription className="text-xs mt-0.5">
                               <span className="flex items-center gap-1">
                                 <Clock className="size-3" />
-                                {project.updatedAt}
+                                {formatRelativeDate(project.updatedAt)}
                               </span>
                             </CardDescription>
                           </div>
