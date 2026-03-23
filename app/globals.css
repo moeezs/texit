@@ -84,19 +84,19 @@
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
+  --background: oklch(0.16 0 0);
   --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
+  --card: oklch(0.215 0 0);
   --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
+  --popover: oklch(0.215 0 0);
   --popover-foreground: oklch(0.985 0 0);
   --primary: oklch(0.922 0 0);
   --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
+  --secondary: oklch(0.275 0 0);
   --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
+  --muted: oklch(0.275 0 0);
   --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
+  --accent: oklch(0.275 0 0);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
@@ -107,11 +107,11 @@
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
+  --sidebar: oklch(0.215 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent: oklch(0.275 0 0);
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
@@ -121,10 +121,290 @@
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
   }
+
   html {
     @apply font-sans;
   }
+}
+
+/* ===== LaTeX Preview Styles ===== */
+
+.latex-preview {
+  line-height: 1.7;
+  font-size: 0.95rem;
+}
+
+.latex-preview p {
+  margin-bottom: 0.75rem;
+}
+
+.latex-preview h2.latex-section {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-top: 2rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.375rem;
+  border-bottom: 1px solid oklch(1 0 0 / 8%);
+}
+
+.latex-preview h3.latex-subsection {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.latex-preview h4.latex-subsubsection {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin-top: 1.25rem;
+  margin-bottom: 0.4rem;
+}
+
+.latex-title-block {
+  text-align: center;
+  margin-bottom: 2rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid oklch(1 0 0 / 8%);
+}
+
+.latex-doc-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.latex-doc-author {
+  font-size: 1rem;
+  color: oklch(0.708 0 0);
+  margin-bottom: 0.25rem;
+}
+
+.latex-doc-date {
+  font-size: 0.875rem;
+  color: oklch(0.556 0 0);
+}
+
+.latex-preview ul.latex-itemize {
+  list-style-type: disc;
+  padding-left: 1.5rem;
+  margin: 0.75rem 0;
+}
+
+.latex-preview ul.latex-itemize>li {
+  margin-bottom: 0.5rem;
+}
+
+.latex-preview ul.latex-itemize ul.latex-itemize {
+  list-style-type: circle;
+  margin-top: 0.5rem;
+}
+
+.latex-preview ol.latex-enumerate {
+  list-style-type: decimal;
+  padding-left: 1.5rem;
+  margin: 0.75rem 0;
+}
+
+.latex-preview ol.latex-enumerate>li {
+  margin-bottom: 0.5rem;
+}
+
+.latex-math-block {
+  margin: 1rem 0;
+  overflow-x: auto;
+  padding: 0.5rem 0;
+}
+
+.latex-math-block .katex-display {
+  margin: 0;
+}
+
+.latex-math-error {
+  background: oklch(0.704 0.191 22.216 / 10%);
+  color: oklch(0.704 0.191 22.216);
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.8rem;
+  margin: 0.5rem 0;
+}
+
+.latex-math-error-inline {
+  color: oklch(0.704 0.191 22.216);
+  font-size: 0.85em;
+}
+
+.latex-center {
+  text-align: center;
+  margin: 1rem 0;
+}
+
+.latex-tikz-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  border: 1px dashed oklch(1 0 0 / 15%);
+  border-radius: 0.75rem;
+  margin: 1rem 0;
+  color: oklch(0.556 0 0);
+  text-align: center;
+}
+
+.latex-tikz-icon {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+.latex-tikz-note {
+  font-size: 0.75rem;
+  color: oklch(0.439 0 0);
+  margin-top: 0.25rem;
+}
+
+.latex-tabular {
+  margin: 1rem 0;
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.latex-tabular td {
+  padding: 0.375rem 0.75rem;
+  border: 1px solid oklch(1 0 0 / 10%);
+  font-size: 0.875rem;
+}
+
+.latex-preview code {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 0.85em;
+  background: oklch(1 0 0 / 5%);
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+}
+
+.latex-preview strong {
+  font-weight: 700;
+}
+
+.latex-preview em {
+  font-style: italic;
+}
+
+.latex-vspace-sm {
+  height: 0.25rem;
+}
+
+.latex-vspace-md {
+  height: 0.5rem;
+}
+
+.latex-vspace-lg {
+  height: 1rem;
+}
+
+/* KaTeX color override for dark mode */
+.dark .katex {
+  color: oklch(0.985 0 0);
+}
+
+/* PDF mode overrides — force dark text on white background, standard LaTeX sizing */
+.pdf-preview-mode .latex-preview {
+  color: #1a1a1a;
+  font-size: 11pt;
+  line-height: 1.5;
+}
+
+.pdf-preview-mode .latex-preview p {
+  margin-bottom: 0.5em;
+}
+
+.pdf-preview-mode .latex-preview p,
+.pdf-preview-mode .latex-preview li,
+.pdf-preview-mode .latex-preview strong,
+.pdf-preview-mode .latex-preview em,
+.pdf-preview-mode .latex-preview span,
+.pdf-preview-mode .latex-preview code,
+.pdf-preview-mode .latex-preview u {
+  color: #1a1a1a;
+}
+
+.pdf-preview-mode h2.latex-section {
+  color: #1a1a1a;
+  font-size: 14pt;
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+  border-bottom-color: #e5e5e5;
+}
+
+.pdf-preview-mode h3.latex-subsection {
+  color: #1a1a1a;
+  font-size: 12pt;
+  margin-top: 1.2em;
+  margin-bottom: 0.4em;
+}
+
+.pdf-preview-mode h4.latex-subsubsection {
+  color: #1a1a1a;
+  font-size: 11pt;
+  margin-top: 1em;
+  margin-bottom: 0.3em;
+}
+
+.pdf-preview-mode .latex-title-block {
+  border-bottom-color: #e5e5e5;
+  margin-bottom: 1.5em;
+  padding-bottom: 1em;
+}
+
+.pdf-preview-mode .latex-doc-title {
+  color: #1a1a1a;
+  font-size: 18pt;
+}
+
+.pdf-preview-mode .latex-doc-author {
+  color: #333;
+  font-size: 12pt;
+}
+
+.pdf-preview-mode .latex-doc-date {
+  color: #555;
+  font-size: 11pt;
+}
+
+.pdf-preview-mode .katex {
+  color: #1a1a1a;
+}
+
+.pdf-preview-mode .latex-math-block {
+  margin: 0.8em 0;
+}
+
+.pdf-preview-mode .latex-tabular td {
+  border-color: #ddd;
+  color: #1a1a1a;
+  font-size: 10pt;
+}
+
+.pdf-preview-mode .latex-tikz-placeholder {
+  border-color: #ccc;
+  color: #666;
+}
+
+.pdf-preview-mode .latex-tikz-note {
+  color: #999;
+}
+
+.pdf-preview-mode ul.latex-itemize,
+.pdf-preview-mode ol.latex-enumerate {
+  margin: 0.5em 0;
+}
+
+.pdf-preview-mode ul.latex-itemize>li,
+.pdf-preview-mode ol.latex-enumerate>li {
+  margin-bottom: 0.3em;
 }
