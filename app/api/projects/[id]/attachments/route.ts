@@ -41,6 +41,8 @@ export async function POST(
     typeof formData.get("message") === "string"
       ? String(formData.get("message")).trim()
       : "";
+  
+  const suppressMessage = formData.get("suppressMessage") === "true";
 
   const { data: thread, error: threadError } = await supabase
     .from("chat_threads")
@@ -59,7 +61,7 @@ export async function POST(
   const effectiveThreadId = thread?.id ?? null;
   let messageId: string | null = null;
 
-  if (effectiveThreadId) {
+  if (effectiveThreadId && !suppressMessage) {
     const { data: uploadMessage, error: messageError } = await supabase
       .from("chat_messages")
       .insert({

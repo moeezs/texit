@@ -36,25 +36,25 @@ export async function GET(
     return Response.json({ error: "Project not found" }, { status: 404 });
   }
 
-  const { data: thread, error: threadError } = await supabase
+  const { data: threads, error: threadsError } = await supabase
     .from("chat_threads")
-    .select("id")
+    .select("id, title, updated_at, created_at")
     .eq("project_id", project.id)
     .eq("owner_id", user.id)
     .is("archived_at", null)
-    .order("updated_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .order("updated_at", { ascending: false });
 
-  if (threadError) {
-    return Response.json({ error: threadError.message }, { status: 500 });
+  if (threadsError) {
+    return Response.json({ error: threadsError.message }, { status: 500 });
   }
 
-  const { data: messages, error: messagesError } = thread
+  const latestThread = threads?.[0];
+
+  const { data: messages, error: messagesError } = latestThread
     ? await supabase
         .from("chat_messages")
         .select("id, role, content, created_at, metadata")
-        .eq("thread_id", thread.id)
+        .eq("thread_id", latestThread.id)
         .order("created_at", { ascending: true })
     : { data: [], error: null };
 
@@ -75,7 +75,8 @@ export async function GET(
       latexContent: project.latex_content,
       updatedAt: project.updated_at,
       createdAt: project.created_at,
-      threadId: thread?.id ?? null,
+      threadId: latestThread?.id ?? null,
+      threads: threads ?? [],
       messages:
         messages?.map((message) => ({
           id: message.id,

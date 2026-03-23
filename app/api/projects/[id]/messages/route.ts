@@ -4,26 +4,36 @@ import { buildMockAssistantResponse } from "@/lib/editor-defaults";
 async function getOrCreateThread(
   supabase: Awaited<ReturnType<typeof requireAuthenticatedUser>>["supabase"],
   projectId: string,
-  userId: string
+  userId: string,
+  explicitThreadId?: string | null
 ) {
-  const { data: existingThread, error: threadLookupError } = await supabase
-    .from("chat_threads")
-    .select("id")
-    .eq("project_id", projectId)
-    .eq("owner_id", userId)
-    .is("archived_at", null)
-    .order("updated_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (threadLookupError) {
-    return { error: threadLookupError, threadId: null };
+  if (explicitThreadId === "new") {
+    // Drop through and create new thread below
+  } else if (explicitThreadId) {
+    const { data: existing, error } = await supabase
+      .from("chat_threads")
+      .select("id")
+      .eq("id", explicitThreadId)
+      .eq("project_id", projectId)
+      .eq("owner_id", userId)
+      .single();
+    if (!error && existing) return { error: null, threadId: existing.id };
+  } else {
+    // Find latest thread
+    const { data: existingThread, error: threadLookupError } = await supabase
+      .from("chat_threads")
+      .select("id")
+      .eq("project_id", projectId)
+      .eq("owner_id", userId)
+      .is("archived_at", null)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+      
+    if (existingThread) return { error: null, threadId: existingThread.id };
   }
 
-  if (existingThread) {
-    return { error: null, threadId: existingThread.id };
-  }
-
+  // Create new thread
   const { data: createdThread, error: createError } = await supabase
     .from("chat_threads")
     .insert({
@@ -51,6 +61,8 @@ export async function POST(
   const body = await request.json().catch(() => ({}));
   const content =
     typeof body.content === "string" ? body.content.trim() : "";
+  const requestedThreadId = typeof body.threadId === "string" ? body.threadId : null;
+  const attachments = Array.isArray(body.attachments) ? body.attachments : [];
   const attachmentIds = Array.isArray(body.attachmentIds)
     ? body.attachmentIds.filter(
         (value: unknown): value is string => typeof value === "string"
@@ -78,7 +90,8 @@ export async function POST(
   const { error: threadError, threadId } = await getOrCreateThread(
     supabase,
     project.id,
-    user.id
+    user.id,
+    requestedThreadId
   );
 
   if (threadError || !threadId) {
@@ -98,6 +111,7 @@ export async function POST(
       content: content || "Uploaded attachments",
       metadata: {
         attachmentIds,
+        attachments,
       },
     })
     .select("id, role, content, created_at, metadata")
@@ -160,3 +174,42 @@ export async function POST(
     })),
   });
 }
+
+export async function GET(
+  request: Request,
+  context: RouteContext<"/api/projects/[id]/messages">
+) {
+  const { error, supabase, user } = await requireAuthenticatedUser();
+
+  if (error || !user) {
+    return error;
+  }
+
+  const url = new URL(request.url);
+  const threadId = url.searchParams.get("threadId");
+
+  if (!threadId) {
+    return Response.json({ error: "threadId required" }, { status: 400 });
+  }
+
+  const { data: messages, error: messagesError } = await supabase
+    .from("chat_messages")
+    .select("id, role, content, created_at, metadata")
+    .eq("thread_id", threadId)
+    .order("created_at", { ascending: true });
+
+  if (messagesError) {
+    return Response.json({ error: messagesError.message }, { status: 500 });
+  }
+
+  return Response.json({
+    messages: messages.map((message) => ({
+      id: message.id,
+      role: message.role,
+      content: message.content,
+      createdAt: message.created_at,
+      metadata: message.metadata,
+    })),
+  });
+}
+

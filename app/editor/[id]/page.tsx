@@ -31,6 +31,7 @@ import {
   Code2,
   Play,
   Sparkles,
+  X,
 } from "lucide-react";
 import { SAMPLE_DOCUMENT, WELCOME_MESSAGE } from "@/lib/editor-defaults";
 
@@ -40,6 +41,7 @@ interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
+  metadata?: any;
 }
 
 function SnippetBox({ code }: { code: string }) {
@@ -119,22 +121,30 @@ function SnippetBox({ code }: { code: string }) {
 function PaginatedPDF({ content, previewRef }: { content: string, previewRef: React.RefObject<HTMLDivElement | null> }) {
   const measureRef = useRef<HTMLDivElement>(null);
   const [pages, setPages] = useState(1);
+  const contentWidth = 624;
+  const contentHeight = 864;
+  const columnGap = 96;
 
   useEffect(() => {
     if (measureRef.current) {
-      const height = measureRef.current.offsetHeight;
-      const pageCount = Math.max(1, Math.ceil(height / 864));
+      // The browser natively flows content into additional columns. Calculate total columns = pages.
+      const sw = measureRef.current.scrollWidth;
+      const pageCount = Math.max(1, Math.round((sw + columnGap) / (contentWidth + columnGap)));
       setPages(pageCount);
     }
   }, [content]);
 
   return (
     <div className="flex flex-col items-center gap-8 pdf-preview-mode w-full" ref={previewRef}>
+      {/* Invisible measurement container to get true page count */}
       <div className="absolute opacity-0 pointer-events-none left-0 top-0 overflow-hidden" style={{ width: 0, height: 0 }}>
         <div 
           ref={measureRef} 
           style={{ 
-            width: "624px",
+            height: `${contentHeight}px`,
+            columnWidth: `${contentWidth}px`,
+            columnGap: `${columnGap}px`,
+            columnFill: "auto",
             fontFamily: "'Computer Modern Serif', Georgia, 'Times New Roman', serif",
             fontSize: "11pt",
             lineHeight: "1.5",
@@ -152,9 +162,14 @@ function PaginatedPDF({ content, previewRef }: { content: string, previewRef: Re
         >
           <div className="relative w-full h-full overflow-hidden">
             <div 
-              className="absolute left-0 w-full"
+              className="absolute top-0"
               style={{ 
-                top: `-${i * 864}px`, 
+                left: `-${i * (contentWidth + columnGap)}px`, 
+                width: `${pages * contentWidth + (pages - 1) * columnGap}px`,
+                height: `${contentHeight}px`,
+                columnWidth: `${contentWidth}px`,
+                columnGap: `${columnGap}px`,
+                columnFill: "auto",
                 fontFamily: "'Computer Modern Serif', Georgia, 'Times New Roman', serif",
                 fontSize: "11pt",
                 lineHeight: "1.5",
@@ -187,6 +202,11 @@ export default function EditorPage() {
   const [loadingProject, setLoadingProject] = useState(true);
   const [savingProject, setSavingProject] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [threads, setThreads] = useState<{ id: string; title: string; updated_at: string }[]>([]);
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const [loadingThread, setLoadingThread] = useState(false);
+  const [initialLatexCode, setInitialLatexCode] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: "welcome",
@@ -257,6 +277,8 @@ export default function EditorPage() {
               id: string;
               title: string;
               latexContent: string;
+              threadId: string | null;
+              threads: { id: string; title: string; updated_at: string }[];
               messages: ChatMessage[];
             };
           }
@@ -273,7 +295,10 @@ export default function EditorPage() {
       if (!cancelled) {
         setProjectId(payload.project.id);
         setProjectTitle(payload.project.title);
-        setLatexCode(payload.project.latexContent);
+        setLatexCode(payload.project.latexContent || "");
+        setInitialLatexCode(payload.project.latexContent || "");
+        setThreads(payload.project.threads || []);
+        setActiveThreadId(payload.project.threadId);
         setMessages(
           payload.project.messages.length
             ? payload.project.messages
@@ -297,83 +322,144 @@ export default function EditorPage() {
   }, [routeProjectId, router]);
 
   const handleGenerate = useCallback(async () => {
-    if (!prompt.trim() || !projectId) return;
+    if ((!prompt.trim() && pendingFiles.length === 0) || !projectId) return;
 
     const currentPrompt = prompt;
+    const currentFiles = [...pendingFiles];
+    
     setPrompt("");
+    setPendingFiles([]);
     setGenerating(true);
     setErrorMessage("");
 
-    const response = await fetch(`/api/projects/${projectId}/messages`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        content: currentPrompt,
-      }),
-    });
+    const optimisticTempId = `temp-${Date.now()}`;
+    const optimisticMessage: ChatMessage = {
+      id: optimisticTempId,
+      role: "user",
+      content: currentPrompt,
+      metadata: {
+        attachments: currentFiles.map(f => ({
+          id: `temp-asset-${Math.random()}`,
+          name: f.name,
+          type: f.type,
+          url: URL.createObjectURL(f)
+        }))
+      }
+    };
+    
+    setMessages((prev) => [...prev, optimisticMessage]);
 
-    const payload = (await response.json().catch(() => null)) as
-      | { error?: string; messages?: ChatMessage[] }
-      | null;
-    const returnedMessages = payload?.messages;
+    try {
+      const attachmentsMeta: any[] = [];
+      
+      for (const file of currentFiles) {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("suppressMessage", "true");
 
-    setGenerating(false);
+        const uploadRes = await fetch(`/api/projects/${projectId}/attachments`, {
+          method: "POST",
+          body: formData,
+        });
 
-    if (!response.ok || !returnedMessages) {
+        const uploadPayload = (await uploadRes.json().catch(() => null)) as { error?: string; asset?: { id: string } } | null;
+        if (!uploadRes.ok || !uploadPayload?.asset?.id) {
+          throw new Error(uploadPayload?.error || `Failed to upload ${file.name}`);
+        }
+        attachmentsMeta.push({ id: uploadPayload.asset.id, name: file.name, type: file.type });
+      }
+
+      const response = await fetch(`/api/projects/${projectId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: currentPrompt,
+          threadId: activeThreadId || "new",
+          attachmentIds: attachmentsMeta.map(a => a.id),
+          attachments: attachmentsMeta,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as
+        | { error?: string; threadId?: string; messages?: ChatMessage[] }
+        | null;
+      const returnedMessages = payload?.messages;
+
+      if (!response.ok || !returnedMessages) {
+        throw new Error(payload?.error ?? "Failed to send message.");
+      }
+
+      setMessages((prev) => [
+        ...prev.filter(m => m.id !== optimisticTempId),
+        ...returnedMessages
+      ]);
+      
+      if (payload?.threadId && payload.threadId !== activeThreadId) {
+         setActiveThreadId(payload.threadId);
+         setThreads(prev => {
+           if (prev.find(t => t.id === payload.threadId)) return prev;
+           return [{ id: payload.threadId!, title: "Project Assistant", updated_at: new Date().toISOString() }, ...prev];
+         });
+      }
+    } catch (err: any) {
+      setMessages((prev) => prev.filter(m => m.id !== optimisticTempId));
       setPrompt(currentPrompt);
-      setErrorMessage(payload?.error ?? "Failed to send message.");
-      return;
+      setPendingFiles(currentFiles);
+      setErrorMessage(err.message || "An error occurred");
+    } finally {
+      setGenerating(false);
     }
-
-    setMessages((prev) => [...prev, ...returnedMessages]);
-  }, [projectId, prompt]);
+  }, [projectId, prompt, pendingFiles, activeThreadId, threads]);
 
   const handleUploadFile = useCallback(
-    async (event: ChangeEvent<HTMLInputElement>) => {
+    (event: ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
 
       if (!file || !projectId) {
         return;
       }
 
-      setGenerating(true);
-      setErrorMessage("");
-
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const response = await fetch(`/api/projects/${projectId}/attachments`, {
-        method: "POST",
-        body: formData,
+      setPendingFiles((prev) => {
+        if (prev.length >= 3) return prev;
+        return [...prev, file];
       });
 
-      const payload = (await response.json().catch(() => null)) as
-        | { error?: string }
-        | null;
-
       event.target.value = "";
-
-      if (!response.ok) {
-        setGenerating(false);
-        setErrorMessage(payload?.error ?? "Failed to upload file.");
-        return;
-      }
-
-      const refreshResponse = await fetch(`/api/projects/${projectId}`);
-      const refreshPayload = (await refreshResponse.json().catch(() => null)) as
-        | { project?: { messages: ChatMessage[] } }
-        | null;
-
-      setGenerating(false);
-
-      if (refreshResponse.ok && refreshPayload?.project) {
-        setMessages(refreshPayload.project.messages);
-      }
     },
     [projectId]
   );
+  
+  const handleThreadSwitch = async (threadId: string) => {
+    if (threadId === activeThreadId) return;
+
+    if (threadId === "new") {
+      setActiveThreadId(null);
+      setMessages([
+        {
+          id: "welcome",
+          role: "assistant",
+          content: WELCOME_MESSAGE,
+        },
+      ]);
+      return;
+    }
+
+    setActiveThreadId(threadId);
+    setLoadingThread(true);
+    setErrorMessage("");
+
+    const res = await fetch(`/api/projects/${projectId}/messages?threadId=${threadId}`);
+    const payload = await res.json().catch(() => null);
+
+    setLoadingThread(false);
+
+    if (!res.ok || !payload?.messages) {
+      setErrorMessage(payload?.error ?? "Failed to load chat history.");
+      return;
+    }
+
+    setMessages(payload.messages.length ? payload.messages : [{ id: "welcome", role: "assistant", content: WELCOME_MESSAGE }]);
+  };
 
   const handleCopy = useCallback(async () => {
     await navigator.clipboard.writeText(latexCode);
@@ -398,6 +484,28 @@ export default function EditorPage() {
     }
   }, [previewMode, projectTitle]);
 
+  const handleSaveTitle = useCallback(async () => {
+    if (!projectId || !projectTitle.trim()) return;
+
+    setSavingProject(true);
+
+    const response = await fetch(`/api/projects/${projectId}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        title: projectTitle.trim(),
+      }),
+    });
+
+    setSavingProject(false);
+    
+    if (!response.ok) {
+      setErrorMessage("Failed to save project title.");
+    }
+  }, [projectId, projectTitle]);
+
   const handleSaveProject = useCallback(async () => {
     if (!projectId) return;
 
@@ -410,7 +518,6 @@ export default function EditorPage() {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        title: projectTitle,
         latexContent: latexCode,
       }),
     });
@@ -421,13 +528,22 @@ export default function EditorPage() {
 
     setSavingProject(false);
 
-    if (!response.ok || !payload?.project) {
+    if (!response.ok) {
       setErrorMessage(payload?.error ?? "Failed to save project.");
       return;
     }
+  }, [latexCode, projectId]);
 
-    setProjectTitle(payload.project.title);
-  }, [latexCode, projectId, projectTitle]);
+  useEffect(() => {
+    if (!projectId || latexCode === initialLatexCode || savingProject) return;
+    
+    const timeout = setTimeout(() => {
+      handleSaveProject();
+      setInitialLatexCode(latexCode);
+    }, 2000);
+    
+    return () => clearTimeout(timeout);
+  }, [latexCode, initialLatexCode, projectId, savingProject, handleSaveProject]);
 
   const handleMouseUpGlobal = useCallback(() => {
     isDraggingHoriz.current = false;
@@ -504,11 +620,22 @@ export default function EditorPage() {
                 <span className="text-xs font-bold text-black">TX</span>
               </div>
             </Link>
-            <div className="h-5 w-px bg-border/50" />
-            <span className="text-sm font-medium text-muted-foreground">
-              {projectTitle}
-            </span>
-          </div>
+            <div className="h-4 w-px bg-border" />
+          <input
+            type="text"
+            className="font-medium text-sm bg-transparent border-0 outline-none w-[200px] truncate focus:ring-1 focus:ring-border rounded-sm px-1 -ml-1 text-foreground"
+            value={projectTitle}
+            onChange={(e) => setProjectTitle(e.target.value)}
+            onBlur={() => void handleSaveTitle()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                (e.target as HTMLInputElement).blur();
+              }
+            }}
+            placeholder="Untitled Project"
+          />
+        </div>
           <div className="flex items-center gap-1.5">
             <Button
               variant="ghost"
@@ -566,25 +693,17 @@ export default function EditorPage() {
               )}
               {copied ? "Copied" : "Copy"}
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8"
-              onClick={handleDownloadPDF}
-            >
-              <Download className="mr-1.5 size-3.5" />
-              PDF
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8"
-              onClick={handleSaveProject}
-              disabled={loadingProject || savingProject}
-            >
-              <Save className="mr-1.5 size-3.5" />
-              {savingProject ? "Saving..." : "Save"}
-            </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={handleDownloadPDF}
+                disabled={loadingProject}
+              >
+                <Download className="size-4" />
+                <span className="hidden sm:inline">Download PDF</span>
+                <span className="sm:hidden">PDF</span>
+              </Button>
           </div>
         </div>
       </header>
@@ -601,10 +720,22 @@ export default function EditorPage() {
                 className="flex flex-col min-h-0 bg-background pt-2"
                 style={{ height: `${verticalSplitRatio * 100}%` }}
               >
-                <div className="px-4 pb-2">
+                <div className="px-4 pb-2 flex items-center justify-between">
                   <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                     <Sparkles className="size-3.5" /> AI Assistant
                   </span>
+                  <select
+                    className="bg-transparent text-[10px] text-muted-foreground outline-none border-none cursor-pointer pr-1 w-28 text-right truncate"
+                    value={activeThreadId || "new"}
+                    onChange={(e) => void handleThreadSwitch(e.target.value)}
+                  >
+                    <option value="new">+ New Chat</option>
+                    {threads.map(t => (
+                      <option key={t.id} value={t.id}>
+                        {new Date(t.updated_at).toLocaleDateString()}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 {errorMessage ? (
                   <div className="px-4 pb-2">
@@ -614,7 +745,11 @@ export default function EditorPage() {
 
                 <div className="flex-1 overflow-y-auto px-4 min-h-0">
                   <div className="space-y-4 py-2">
-                    {messages.map((msg) => (
+                    {loadingThread ? (
+                      <div className="flex justify-center py-6">
+                        <Loader2 className="size-5 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : messages.map((msg) => (
                       <div
                         key={msg.id}
                         className={`flex gap-3 ${
@@ -633,9 +768,35 @@ export default function EditorPage() {
                               : "bg-muted/30 text-foreground max-w-[95%]"
                           }`}
                         >
-                          {msg.role === "user"
-                            ? msg.content
-                            : renderMessageContent(msg.content)}
+                          {msg.role === "user" ? (
+                            <>
+                              {msg.metadata?.attachments?.length > 0 && (
+                                <div className="flex flex-wrap gap-2 mb-2">
+                                  {msg.metadata.attachments.map((att: any, i: number) => (
+                                    <div key={i} className="flex items-center gap-1 rounded-sm text-[10px] overflow-hidden max-w-[200px]">
+                                      {att.type?.startsWith("image/") ? (
+                                        <div className="relative border border-primary-foreground/20 rounded-md overflow-hidden shadow-sm">
+                                          <img 
+                                            src={att.url || `/api/projects/${projectId}/attachments/${att.id}`} 
+                                            alt={att.name} 
+                                            className="w-full h-auto max-h-[160px] object-cover" 
+                                          />
+                                        </div>
+                                      ) : (
+                                        <div className="flex items-center gap-1 bg-primary-foreground/20 px-2 py-1 rounded-sm">
+                                          <Paperclip className="size-3 shrink-0" />
+                                          <span className="truncate max-w-[120px]">{att.name}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              <span className="whitespace-pre-wrap">{msg.content}</span>
+                            </>
+                          ) : (
+                            renderMessageContent(msg.content)
+                          )}
                         </div>
                         {msg.role === "user" && (
                           <div className="size-7 rounded-md bg-muted flex items-center justify-center shrink-0 mt-0.5">
@@ -659,6 +820,30 @@ export default function EditorPage() {
                 </div>
 
                 <div className="px-4 pb-2 pt-1">
+                  {pendingFiles.length > 0 && (
+                    <div className="flex gap-2 mb-2 px-1">
+                      {pendingFiles.map((file, i) => (
+                        <div key={i} className="relative size-12 group">
+                          <div className="size-full rounded-md border border-border/50 overflow-hidden bg-muted/20">
+                            {file.type.startsWith("image/") ? (
+                              <img src={URL.createObjectURL(file)} alt="" className="size-full object-cover opacity-80" />
+                            ) : (
+                              <div className="size-full flex justify-center items-center text-[10px] text-muted-foreground break-all p-1 text-center leading-tight">
+                                {file.name.length > 15 ? file.name.slice(0, 12) + "..." : file.name}
+                              </div>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => setPendingFiles(prev => prev.filter((_, index) => index !== i))}
+                            className="absolute -top-1.5 -right-1.5 size-4 rounded-full bg-destructive flex items-center justify-center text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer shadow-sm hover:scale-110 z-10"
+                            type="button"
+                          >
+                            <X className="size-2.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <div className="relative flex items-end gap-2 rounded-xl border border-border/60 bg-muted/20 p-1.5 shadow-sm focus-within:ring-1 focus-within:ring-ring focus-within:border-primary transition-all">
                     <input
                       type="file"
@@ -693,7 +878,7 @@ export default function EditorPage() {
                       size="icon"
                       className="h-8 w-8 shrink-0 rounded-lg"
                       onClick={() => void handleGenerate()}
-                      disabled={loadingProject || generating || !prompt.trim()}
+                      disabled={loadingProject || generating || (!prompt.trim() && pendingFiles.length === 0)}
                     >
                       {generating ? (
                         <Loader2 className="size-4 animate-spin" />
