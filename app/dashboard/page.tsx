@@ -111,7 +111,7 @@ export default function DashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [router]);
 
   const filteredProjects = useMemo(() => {
     if (!searchQuery.trim()) return projects;

@@ -20,7 +20,7 @@ async function getOrCreateThread(
     if (!error && existing) return { error: null, threadId: existing.id };
   } else {
     // Find latest thread
-    const { data: existingThread, error: threadLookupError } = await supabase
+    const { data } = await supabase
       .from("chat_threads")
       .select("id")
       .eq("project_id", projectId)
@@ -30,7 +30,9 @@ async function getOrCreateThread(
       .limit(1)
       .maybeSingle();
       
-    if (existingThread) return { error: null, threadId: existingThread.id };
+    if (data) {
+      return { error: null, threadId: data.id };
+    }
   }
 
   // Create new thread
@@ -176,8 +178,7 @@ export async function POST(
 }
 
 export async function GET(
-  request: Request,
-  context: RouteContext<"/api/projects/[id]/messages">
+  request: Request
 ) {
   const { error, supabase, user } = await requireAuthenticatedUser();
 

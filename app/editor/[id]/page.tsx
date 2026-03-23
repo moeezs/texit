@@ -15,23 +15,22 @@ import { Textarea } from "@/components/ui/textarea";
 import LatexRenderer from "@/components/latex-renderer";
 import CodeEditor from "@/components/code-editor";
 import {
-  Save,
   Loader2,
-  Copy,
-  Check,
-  PanelLeftClose,
-  PanelLeftOpen,
+  Paperclip,
+  X,
   FileText,
   Eye,
   Download,
-  Send,
-  Paperclip,
-  Bot,
-  User,
   Code2,
   Play,
+  Bot,
+  User,
+  Send,
   Sparkles,
-  X,
+  Check,
+  Copy,
+  PanelLeftClose,
+  PanelLeftOpen
 } from "lucide-react";
 import { SAMPLE_DOCUMENT, WELCOME_MESSAGE } from "@/lib/editor-defaults";
 
@@ -41,7 +40,9 @@ interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
-  metadata?: any;
+  metadata?: {
+    attachments?: { id?: string; name: string; type: string; url?: string }[];
+  };
 }
 
 function SnippetBox({ code }: { code: string }) {
@@ -350,7 +351,7 @@ export default function EditorPage() {
     setMessages((prev) => [...prev, optimisticMessage]);
 
     try {
-      const attachmentsMeta: any[] = [];
+      const attachmentsMeta: { id?: string; name: string; type: string; url?: string }[] = [];
       
       for (const file of currentFiles) {
         const formData = new FormData();
@@ -401,11 +402,12 @@ export default function EditorPage() {
            return [{ id: payload.threadId!, title: "Project Assistant", updated_at: new Date().toISOString() }, ...prev];
          });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const error = err as Error;
       setMessages((prev) => prev.filter(m => m.id !== optimisticTempId));
       setPrompt(currentPrompt);
       setPendingFiles(currentFiles);
-      setErrorMessage(err.message || "An error occurred");
+      setErrorMessage(error.message || "An error occurred");
     } finally {
       setGenerating(false);
     }
@@ -770,9 +772,9 @@ export default function EditorPage() {
                         >
                           {msg.role === "user" ? (
                             <>
-                              {msg.metadata?.attachments?.length > 0 && (
+                              {msg.metadata?.attachments && msg.metadata.attachments.length > 0 && (
                                 <div className="flex flex-wrap gap-2 mb-2">
-                                  {msg.metadata.attachments.map((att: any, i: number) => (
+                                  {msg.metadata.attachments.map((att: { id?: string; name: string; type: string; url?: string }, i: number) => (
                                     <div key={i} className="flex items-center gap-1 rounded-sm text-[10px] overflow-hidden max-w-[200px]">
                                       {att.type?.startsWith("image/") ? (
                                         <div className="relative border border-primary-foreground/20 rounded-md overflow-hidden shadow-sm">

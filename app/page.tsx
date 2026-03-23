@@ -8,6 +8,7 @@ import {
   Code2,
   FileText,
 } from "lucide-react";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const features = [
   {
@@ -42,7 +43,10 @@ const features = [
   },
 ];
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
   return (
     <div className="flex flex-col min-h-screen">
       {/* Navbar */}
@@ -54,15 +58,25 @@ export default function LandingPage() {
             </div>
             <span className="text-lg font-semibold tracking-tight">TeXit</span>
           </Link>
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="default" className="h-9" asChild>
-              <Link href="/login">Sign In</Link>
-            </Button>
-            <Button size="default" className="h-9" asChild>
-              <Link href="/signup">
-                Get Started <ArrowRight className="ml-1" />
-              </Link>
-            </Button>
+          <div className="flex flex-col sm:flex-row items-center gap-3">
+            {user ? (
+              <Button size="default" className="h-9" asChild>
+                <Link href="/dashboard">
+                  Dashboard <ArrowRight className="ml-1" />
+                </Link>
+              </Button>
+            ) : (
+              <>
+                <Button variant="ghost" size="default" className="h-9" asChild>
+                  <Link href="/login">Sign In</Link>
+                </Button>
+                <Button size="default" className="h-9" asChild>
+                  <Link href="/signup">
+                    Get Started <ArrowRight className="ml-1" />
+                  </Link>
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </nav>
@@ -94,20 +108,30 @@ export default function LandingPage() {
             workspace.
           </p>
 
-          <div className="mt-10 flex flex-col sm:flex-row items-center gap-4">
-            <Button size="lg" className="h-12 px-8 text-base" asChild>
-              <Link href="/signup">
-                Get Started Free <ArrowRight className="ml-2" />
-              </Link>
-            </Button>
-            <Button
-              variant="outline"
-              size="lg"
-              className="h-12 px-8 text-base"
-              asChild
-            >
-              <Link href="/login">Sign In</Link>
-            </Button>
+          <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
+            {user ? (
+              <Button size="lg" className="h-12 px-8 text-base" asChild>
+                <Link href="/dashboard">
+                  Go to Dashboard <ArrowRight className="ml-2" />
+                </Link>
+              </Button>
+            ) : (
+              <>
+                <Button size="lg" className="h-12 px-8 text-base" asChild>
+                  <Link href="/signup">
+                    Get Started Free <ArrowRight className="ml-2" />
+                  </Link>
+                </Button>
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="h-12 px-8 text-base"
+                  asChild
+                >
+                  <Link href="/login">Sign In</Link>
+                </Button>
+              </>
+            )}
           </div>
 
           {/* Mock editor preview */}
