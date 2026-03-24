@@ -5,8 +5,37 @@ import { EditorState } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter, drawSelection, rectangularSelection } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { searchKeymap, highlightSelectionMatches, openSearchPanel } from "@codemirror/search";
+import { autocompletion, CompletionContext } from "@codemirror/autocomplete";
 import { StreamLanguage } from "@codemirror/language";
 import { stex } from "@codemirror/legacy-modes/mode/stex";
+
+function latexCompletions(context: CompletionContext) {
+  const word = context.matchBefore(/\\[a-zA-Z]*/);
+  if (!word) return null;
+  if (word.from === word.to && !context.explicit) return null;
+  
+  return {
+    from: word.from,
+    options: [
+      { label: "\\alpha", type: "variable", info: "Greek letter alpha" },
+      { label: "\\beta", type: "variable", info: "Greek letter beta" },
+      { label: "\\gamma", type: "variable", info: "Greek letter gamma" },
+      { label: "\\theta", type: "variable", info: "Greek letter theta" },
+      { label: "\\pi", type: "variable", info: "Greek letter pi" },
+      { label: "\\sum", type: "keyword", info: "Summation symbol" },
+      { label: "\\int", type: "keyword", info: "Integral symbol" },
+      { label: "\\frac{}{}", type: "function", info: "Fraction \\frac{num}{den}" },
+      { label: "\\begin{document}", type: "keyword", info: "Starts document" },
+      { label: "\\begin{equation}", type: "keyword", info: "Math equation block" },
+      { label: "\\item", type: "keyword", info: "List item" },
+      { label: "\\section{}", type: "function", info: "Section header" },
+      { label: "\\subsection{}", type: "function", info: "Subsection header" },
+      { label: "\\textbf{}", type: "function", info: "Bold text" },
+      { label: "\\textit{}", type: "function", info: "Italic text" },
+      { label: "\\underline{}", type: "function", info: "Underline text" }
+    ]
+  };
+}
 
 interface CodeEditorProps {
   value: string;
@@ -154,6 +183,7 @@ export default function CodeEditor({ value, onChange }: CodeEditorProps) {
         rectangularSelection(),
         highlightSelectionMatches(),
         history(),
+        autocompletion({ override: [latexCompletions] }),
         StreamLanguage.define(stex),
         darkTheme,
         keymap.of([

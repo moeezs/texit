@@ -34,6 +34,7 @@ export default function ProfilePage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [fullName, setFullName] = useState("");
+  const [aiRequestsCount, setAiRequestsCount] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -57,7 +58,7 @@ export default function ProfilePage() {
       });
       
       const payload = (await response.json().catch(() => null)) as
-        | { error?: string; profile?: UserProfile }
+        | { error?: string; profile?: UserProfile; aiRequestsCount?: number }
         | null;
 
       if (!response.ok) {
@@ -71,6 +72,7 @@ export default function ProfilePage() {
       if (!cancelled) {
         setProfile(payload?.profile ?? null);
         setFullName(payload?.profile?.full_name ?? "");
+        setAiRequestsCount(payload?.aiRequestsCount ?? 0);
         setLoading(false);
       }
     }
@@ -222,6 +224,11 @@ export default function ProfilePage() {
                     <div className="mt-2 text-xs text-muted-foreground/80 flex items-center justify-center sm:justify-start gap-1">
                       <UserIcon className="size-3" />
                       Member since {memberSince}
+                    </div>
+                    <div className="mt-3 flex items-center justify-center sm:justify-start">
+                      <div className="text-xs px-2.5 py-1 rounded-md bg-primary/10 text-primary font-medium border border-primary/20">
+                        {aiRequestsCount} / 10 AI Requests Used This Month
+                      </div>
                     </div>
                   </div>
                 </CardHeader>

@@ -61,36 +61,36 @@ function SnippetBox({ code }: { code: string }) {
         <div className="flex items-center gap-1 p-0.5 bg-muted/50 rounded-md border border-border/50">
           <button
             onClick={() => setView("code")}
-            className={`text-[10px] font-medium flex items-center gap-1.5 px-2 py-1 rounded-sm transition-colors ${
+            className={`text-xs font-medium flex items-center gap-1.5 px-2 py-1 rounded-sm transition-colors ${
               view === "code"
                 ? "bg-background text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            <Code2 className="size-3" /> Code
+            <Code2 className="size-3.5" /> Code
           </button>
           <button
             onClick={() => setView("render")}
-            className={`text-[10px] font-medium flex items-center gap-1.5 px-2 py-1 rounded-sm transition-colors ${
+            className={`text-xs font-medium flex items-center gap-1.5 px-2 py-1 rounded-sm transition-colors ${
               view === "render"
                 ? "bg-background text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            <Play className="size-3" /> Rendered
+            <Play className="size-3.5" /> Rendered
           </button>
         </div>
         <div className="flex items-center gap-1">
           <Button
             variant="ghost"
             size="sm"
-            className="h-6 px-2 text-[10px] text-muted-foreground hover:text-foreground"
+            className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
             onClick={handleCopy}
           >
             {copied ? (
-              <Check className="size-3 mr-1 text-green-500" />
+              <Check className="size-3.5 mr-1 text-green-500" />
             ) : (
-              <Copy className="size-3 mr-1" />
+              <Copy className="size-3.5 mr-1" />
             )}
             {copied ? "Copied" : "Copy"}
           </Button>
@@ -119,7 +119,7 @@ function SnippetBox({ code }: { code: string }) {
   );
 }
 
-function PaginatedPDF({ content, previewRef }: { content: string, previewRef: React.RefObject<HTMLDivElement | null> }) {
+function PaginatedPDF({ content, previewRef, zoom = 1 }: { content: string, previewRef: React.RefObject<HTMLDivElement | null>, zoom?: number }) {
   const measureRef = useRef<HTMLDivElement>(null);
   const [pages, setPages] = useState(1);
   const contentWidth = 624;
@@ -146,6 +146,7 @@ function PaginatedPDF({ content, previewRef }: { content: string, previewRef: Re
             columnWidth: `${contentWidth}px`,
             columnGap: `${columnGap}px`,
             columnFill: "auto",
+            width: "max-content",
             fontFamily: "'Computer Modern Serif', Georgia, 'Times New Roman', serif",
             fontSize: "11pt",
             lineHeight: "1.5",
@@ -156,11 +157,11 @@ function PaginatedPDF({ content, previewRef }: { content: string, previewRef: Re
       </div>
 
       {Array.from({ length: pages }).map((_, i) => (
-        <div 
-          key={i} 
-          className="pdf-page bg-white relative shadow-2xl shadow-black/40 shrink-0"
-          style={{ width: '816px', height: '1056px', padding: '96px', boxSizing: 'border-box' }}
-        >
+        <div key={i} style={{ width: 816 * zoom, height: 1056 * zoom, marginBottom: 32 * zoom }} className="relative shrink-0">
+          <div 
+            className="pdf-page bg-white absolute top-0 left-0 shadow-2xl shadow-black/40 origin-top-left"
+            style={{ width: '816px', height: '1056px', padding: '96px', boxSizing: 'border-box', transform: `scale(${zoom})` }}
+          >
           <div className="relative w-full h-full overflow-hidden">
             <div 
               className="absolute top-0"
@@ -181,6 +182,7 @@ function PaginatedPDF({ content, previewRef }: { content: string, previewRef: Re
             </div>
           </div>
         </div>
+        </div>
       ))}
     </div>
   );
@@ -196,6 +198,7 @@ export default function EditorPage() {
   const [copied, setCopied] = useState(false);
   const [showLeftPanel, setShowLeftPanel] = useState(true);
   const [previewMode, setPreviewMode] = useState<PreviewMode>("preview");
+  const [pdfZoom, setPdfZoom] = useState(1);
   const [projectId, setProjectId] = useState(
     routeProjectId && routeProjectId !== "new" ? routeProjectId : ""
   );
@@ -598,8 +601,15 @@ export default function EditorPage() {
         const code = part
           .replace(/^```(?:latex)?\n/, "")
           .replace(/\n```$/, "");
+          
+        if (!code.trim() || code.trim() === "none" || code.trim() === "null") {
+          return null;
+        }
+        
         return <SnippetBox key={index} code={code} />;
       }
+
+      if (!part.trim()) return null;
 
       return (
         <span
@@ -679,6 +689,27 @@ export default function EditorPage() {
                 PDF
               </button>
             </div>
+
+            {previewMode === "pdf" && (
+              <>
+                <div className="h-5 w-px bg-border/50 mx-0.5" />
+                <div className="flex items-center rounded-lg border border-border/50 p-0.5">
+                  <button 
+                    onClick={() => setPdfZoom(z => Math.max(0.25, z - 0.25))} 
+                    className="px-2 hover:bg-muted rounded-md text-muted-foreground font-semibold"
+                  >
+                    -
+                  </button>
+                  <span className="text-[10px] w-8 text-center font-mono">{Math.round(pdfZoom * 100)}%</span>
+                  <button 
+                    onClick={() => setPdfZoom(z => Math.min(3, z + 0.25))} 
+                    className="px-2 hover:bg-muted rounded-md text-muted-foreground font-semibold"
+                  >
+                    +
+                  </button>
+                </div>
+              </>
+            )}
 
             <div className="h-5 w-px bg-border/50 mx-0.5" />
 
@@ -946,8 +977,8 @@ export default function EditorPage() {
             }`}
           >
             {previewMode === "pdf" ? (
-              <div className="w-full mx-auto md:max-w-[850px] lg:max-w-none flex justify-center">
-                <PaginatedPDF content={latexCode} previewRef={previewRef} />
+              <div className="w-full mx-auto md:max-w-none flex justify-center">
+                <PaginatedPDF content={latexCode} previewRef={previewRef} zoom={pdfZoom} />
               </div>
             ) : (
               <div className="max-w-2xl mx-auto" ref={previewRef}>

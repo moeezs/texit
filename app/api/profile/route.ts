@@ -17,7 +17,18 @@ export async function GET() {
     return Response.json({ error: profileError.message }, { status: 500 });
   }
 
-  return Response.json({ profile: data });
+  const startOfMonth = new Date();
+  startOfMonth.setDate(1);
+  startOfMonth.setHours(0, 0, 0, 0);
+
+  const { count: aiRequestsCount } = await supabase
+    .from("chat_messages")
+    .select("*", { count: 'exact', head: true })
+    .eq("user_id", user.id)
+    .eq("role", "user")
+    .gte("created_at", startOfMonth.toISOString());
+
+  return Response.json({ profile: data, aiRequestsCount: aiRequestsCount || 0 });
 }
 
 export async function PATCH(request: Request) {
