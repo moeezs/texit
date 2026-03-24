@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TeXit — AI-Powered LaTeX Editor",
+  title: "TeXit",
   description:
     "Write complex LaTeX at the speed of thought. AI-powered generation, live preview, and a beautiful editing experience.",
 };

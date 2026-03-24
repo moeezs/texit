@@ -166,3 +166,102 @@ export async function PATCH(
     },
   });
 }
+
+export async function POST(
+  _request: Request,
+  context: RouteContext<"/api/projects/[id]">
+) {
+  const { error, supabase, user } = await requireAuthenticatedUser();
+
+  if (error || !user) {
+    return error;
+  }
+
+  const { id } = await context.params;
+  const { project, error: projectError } = await getOwnedProject(
+    supabase,
+    user.id,
+    id
+  );
+
+  if (projectError || !project) {
+    return Response.json({ error: "Project not found" }, { status: 404 });
+  }
+
+  const title = `${project.title} Copy`;
+  const latexContent = project.latex_content;
+
+  const { data: newProject, error: newProjectError } = await supabase
+    .from("projects")
+    .insert({
+      owner_id: user.id,
+      title,
+      latex_content: latexContent,
+      last_opened_at: new Date().toISOString(),
+    })
+    .select("id, title, latex_content, updated_at, created_at")
+    .single();
+
+  if (newProjectError || !newProject) {
+    return Response.json(
+      { error: newProjectError?.message ?? "Failed to duplicate project" },
+      { status: 500 }
+    );
+  }
+
+  const { data: thread } = await supabase
+    .from("chat_threads")
+    .insert({
+      project_id: newProject.id,
+      owner_id: user.id,
+      title: "Project Assistant",
+    })
+    .select("id")
+    .single();
+
+  if (thread) {
+    await supabase.from("chat_messages").insert({
+      thread_id: thread.id,
+      project_id: newProject.id,
+      user_id: user.id,
+      role: "assistant",
+      content: "I am ready to help you with your duplicated project! How can I assist you?",
+      metadata: { seeded: true },
+    });
+  }
+
+  await supabase.from("project_revisions").insert({
+    project_id: newProject.id,
+    created_by: user.id,
+    source: "system",
+    latex_content: latexContent,
+    notes: "Duplicated project state",
+  });
+
+  return Response.json({ project: newProject });
+}
+
+export async function DELETE(
+  _request: Request,
+  context: RouteContext<"/api/projects/[id]">
+) {
+  const { error, supabase, user } = await requireAuthenticatedUser();
+
+  if (error || !user) {
+    return error;
+  }
+
+  const { id } = await context.params;
+
+  const { error: deleteError } = await supabase
+    .from("projects")
+    .delete()
+    .eq("id", id)
+    .eq("owner_id", user.id);
+
+  if (deleteError) {
+    return Response.json({ error: deleteError.message }, { status: 500 });
+  }
+
+  return Response.json({ success: true });
+}

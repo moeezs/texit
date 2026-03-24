@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { Logo } from "@/components/logo";
+import { LandingHeader } from "@/components/landing-header";
 import { Button } from "@/components/ui/button";
 import {
   Sparkles,
@@ -50,36 +52,7 @@ export default async function LandingPage() {
   return (
     <div className="flex flex-col min-h-screen">
       {/* Navbar */}
-      <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl">
-        <div className="mx-auto max-w-6xl flex items-center justify-between px-6 h-16">
-          <Link href="/" className="flex items-center gap-2.5">
-            <div className="size-9 rounded-lg bg-gradient-to-br from-white to-white/60 flex items-center justify-center">
-              <span className="text-sm font-bold text-black">TX</span>
-            </div>
-            <span className="text-lg font-semibold tracking-tight">TeXit</span>
-          </Link>
-          <div className="flex flex-col sm:flex-row items-center gap-3">
-            {user ? (
-              <Button size="default" className="h-9" asChild>
-                <Link href="/dashboard">
-                  Dashboard <ArrowRight className="ml-1" />
-                </Link>
-              </Button>
-            ) : (
-              <>
-                <Button variant="ghost" size="default" className="h-9" asChild>
-                  <Link href="/login">Sign In</Link>
-                </Button>
-                <Button size="default" className="h-9" asChild>
-                  <Link href="/signup">
-                    Get Started <ArrowRight className="ml-1" />
-                  </Link>
-                </Button>
-              </>
-            )}
-          </div>
-        </div>
-      </nav>
+      <LandingHeader user={user} />
 
       {/* Hero */}
       <main className="flex-1">
@@ -230,9 +203,7 @@ We prove this using the
       <footer className="border-t border-border/50 py-8 px-6">
         <div className="mx-auto max-w-6xl flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2.5">
-            <div className="size-7 rounded-md bg-gradient-to-br from-white to-white/60 flex items-center justify-center">
-              <span className="text-[10px] font-bold text-black">TX</span>
-            </div>
+            <Logo className="size-7 text-foreground" />
             <span className="text-sm text-muted-foreground">
               © 2026 TeXit. All rights reserved.
             </span>

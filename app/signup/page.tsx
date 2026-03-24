@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -125,15 +126,13 @@ export default function SignupPage() {
         <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-gradient-to-r from-purple-500/5 via-blue-500/5 to-cyan-500/5 rounded-full blur-3xl" />
       </div>
 
-      <Card className="w-full max-w-md p-2">
+      <Card className="w-full max-w-md">
         <CardHeader className="text-center space-y-3 pb-6">
           <Link
             href="/"
-            className="inline-flex items-center justify-center gap-2 mb-2"
+            className="inline-flex items-center justify-center gap-2 mb-2 mt-4"
           >
-            <div className="size-10 rounded-lg bg-gradient-to-br from-white to-white/60 flex items-center justify-center">
-              <span className="text-base font-bold text-black">TX</span>
-            </div>
+            <Logo className="size-10 text-foreground" />
           </Link>
           <CardTitle className="text-2xl">Create your account</CardTitle>
           <CardDescription className="text-base">
@@ -142,7 +141,7 @@ export default function SignupPage() {
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-5 px-8">
-            <Button
+            {/* <Button
               type="button"
               variant="outline"
               className="w-full h-11 text-sm"
@@ -162,7 +161,7 @@ export default function SignupPage() {
                   or continue with email
                 </span>
               </div>
-            </div>
+            </div> */}
 
             <div className="space-y-2">
               <Label htmlFor="name">Full Name</Label>
@@ -207,7 +206,7 @@ export default function SignupPage() {
               <p className="text-sm text-emerald-400">{successMessage}</p>
             ) : null}
           </CardContent>
-          <CardFooter className="flex flex-col gap-5 pt-4 px-8 pb-8">
+          <CardFooter className="flex flex-col gap-5 pt-4 px-8 pb-8 mt-10">
             <Button type="submit" className="w-full h-11" disabled={loading}>
               {loading && <Loader2 className="mr-2 size-4 animate-spin" />}
               Create Account

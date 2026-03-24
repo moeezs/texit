@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -56,7 +57,7 @@ export default function ProfilePage() {
       const response = await fetch("/api/profile", {
         credentials: "include",
       });
-      
+
       const payload = (await response.json().catch(() => null)) as
         | { error?: string; profile?: UserProfile; aiRequestsCount?: number }
         | null;
@@ -110,7 +111,7 @@ export default function ProfilePage() {
     }
 
     setSuccessMessage("Profile updated successfully");
-    
+
     // Update local profile state
     if (profile) {
       setProfile({
@@ -144,24 +145,22 @@ export default function ProfilePage() {
 
   const memberSince = profile?.created_at
     ? new Date(profile.created_at).toLocaleDateString(undefined, {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      })
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    })
     : "";
 
-  const initial = profile?.full_name?.charAt(0)?.toUpperCase() ?? 
-                  profile?.email?.charAt(0)?.toUpperCase() ?? 
-                  "U";
+  const initial = profile?.full_name?.charAt(0)?.toUpperCase() ??
+    profile?.email?.charAt(0)?.toUpperCase() ??
+    "U";
 
   return (
     <div className="min-h-screen flex flex-col">
       <header className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl">
         <div className="mx-auto max-w-6xl flex items-center justify-between px-6 h-16">
           <Link href="/dashboard" className="flex items-center gap-2.5">
-            <div className="size-9 rounded-lg bg-gradient-to-br from-white to-white/60 flex items-center justify-center">
-              <span className="text-sm font-bold text-black">TX</span>
-            </div>
+            <Logo className="size-9 text-foreground" />
             <span className="text-lg font-semibold tracking-tight">TeXit</span>
           </Link>
           <div className="flex items-center gap-3">
@@ -244,7 +243,7 @@ export default function ProfilePage() {
                       className="max-w-md h-11"
                     />
                   </div>
-                  
+
                   {errorMessage ? (
                     <p className="text-sm text-destructive">{errorMessage}</p>
                   ) : null}
@@ -252,7 +251,7 @@ export default function ProfilePage() {
                     <p className="text-sm text-emerald-500">{successMessage}</p>
                   ) : null}
                 </CardContent>
-                <CardFooter className="bg-muted/30 px-8 py-5 flex items-center justify-between border-t border-border/50">
+                <CardFooter className="bg-muted/30 px-8 py-5 mt-10 flex items-center justify-between border-t border-border/50">
                   <p className="text-xs text-muted-foreground">
                     Your name will be displayed on your generated documents.
                   </p>

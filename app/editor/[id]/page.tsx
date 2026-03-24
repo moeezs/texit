@@ -9,6 +9,7 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from "react";
 import Link from "next/link";
+import { Logo } from "@/components/logo";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -628,9 +629,7 @@ export default function EditorPage() {
         <div className="flex items-center justify-between px-4 h-14">
           <div className="flex items-center gap-3">
             <Link href="/dashboard" className="flex items-center gap-2">
-              <div className="size-8 rounded-md bg-gradient-to-br from-white to-white/60 flex items-center justify-center">
-                <span className="text-xs font-bold text-black">TX</span>
-              </div>
+              <Logo className="size-8 text-foreground" />
             </Link>
             <div className="h-4 w-px bg-border" />
           <input
